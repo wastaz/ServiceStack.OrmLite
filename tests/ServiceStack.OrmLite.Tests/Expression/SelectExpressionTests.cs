@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Linq;
+using System.Text;
 using NUnit.Framework;
 using ServiceStack.Common.Tests.Models;
 using ServiceStack.DataAnnotations;
@@ -242,6 +243,42 @@ namespace ServiceStack.OrmLite.Tests.Expression
                     Is.StringContaining("WHERE name like '%b%'"));
 
                 OrmLiteConfig.StripUpperInLike = false;
+            }
+        }
+
+        public class DistinctColumnTest {
+            public int Id { get; set; }
+            public int Foo { get; set; }
+            public int Bar { get; set; }
+        }
+
+        public class DistinctJoinColumnTest {
+            public int Id { get; set; }
+            public int DistinctColumnTestId { get; set; }
+            public string Name { get; set; }
+        }
+
+        [Test]
+        public void CanSelectMultipleDistinctColumns() {
+            using (var db = OpenDbConnection()) {
+                db.DropAndCreateTable(typeof(DistinctColumnTest));
+                db.DropAndCreateTable(typeof(DistinctJoinColumnTest));
+                db.InsertAll(new[] {
+                    new DistinctColumnTest { Id = 1, Foo = 1, Bar = 42 },
+                    new DistinctColumnTest { Id = 2, Foo = 2, Bar = 55 },
+                });
+
+                db.InsertAll(new [] {
+                    new DistinctJoinColumnTest { DistinctColumnTestId = 1, Name = "Foo", Id = 1 },
+                    new DistinctJoinColumnTest { DistinctColumnTestId = 1, Name = "Foo", Id = 2 },
+                    new DistinctJoinColumnTest { DistinctColumnTestId = 2, Name = "Bar", Id = 3 },
+                });
+
+                var expr = db.From<DistinctColumnTest>().Join<DistinctJoinColumnTest>().SelectDistinct(dt => new { dt.Bar, dt.Foo });
+                var result = db.Select(expr);
+                db.GetLastSql().Print();
+
+                Assert.AreEqual(2, result.Count);
             }
         }
     }
